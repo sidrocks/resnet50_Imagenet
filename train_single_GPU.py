@@ -9,7 +9,7 @@ import time
 from math import sqrt
 
 from model import ResNet50
-from torch.amp import autocast, GradScaler
+from torch.cuda.amp import autocast, GradScaler
 
 from tqdm import tqdm
 import torch
@@ -23,6 +23,7 @@ import torch.nn.functional as F
 
 
 import logging
+import argparse
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -38,6 +39,7 @@ class Params:
         self.pct_start = 0.3
         self.div_factor = 25.0
         self.final_div_factor = 1e4
+        self.label_smoothing = 0.1
 
     def __repr__(self):
         return str(self.__dict__)
@@ -55,6 +57,50 @@ class MetricLogger:
         self.metrics.append(epoch_metrics)
         with open(os.path.join(self.log_dir, 'training_log.json'), 'w') as f:
             json.dump(self.metrics, f, indent=4)
+
+    def log_markdown_row(self, epoch_metrics):
+        md_path = os.path.join(self.log_dir, 'training_log.md')
+        header = (
+            "| Epoch | Train Loss | Val Loss | Top1 (%) | Top5 (%) | LR | Epoch Time (s) |\n"
+            "|---:|---:|---:|---:|---:|---:|---:|\n"
+        )
+        if not os.path.exists(md_path):
+            with open(md_path, 'w') as f:
+                f.write(header)
+        row = f"| {epoch_metrics.get('epoch','')} | {epoch_metrics.get('train_loss',''):.4f} | {epoch_metrics.get('test_loss','') if epoch_metrics.get('test_loss') is not None else ''} | {epoch_metrics.get('test_accuracy','') if epoch_metrics.get('test_accuracy') is not None else ''} | {epoch_metrics.get('test_accuracy_top5','') if epoch_metrics.get('test_accuracy_top5') is not None else ''} | {epoch_metrics.get('learning_rate',''):.6f} | {epoch_metrics.get('epoch_time',''):.2f} |\n"
+        with open(md_path, 'a') as f:
+            f.write(row)
+
+    def plot_pngs(self):
+        try:
+            import pandas as pd
+            import matplotlib.pyplot as plt
+        except Exception:
+            return
+        if not self.metrics:
+            return
+        df = pd.DataFrame(self.metrics)
+        # Loss
+        plt.figure()
+        if 'train_loss' in df:
+            plt.plot(df['epoch'], df['train_loss'], label='train')
+        if 'test_loss' in df:
+            plt.plot(df['epoch'], df['test_loss'], label='val')
+        plt.xlabel('epoch'); plt.ylabel('loss'); plt.legend(); plt.grid(True)
+        plt.savefig(os.path.join(self.log_dir, 'loss.png'), dpi=200, bbox_inches='tight'); plt.close()
+        # Accuracy
+        plt.figure()
+        if 'test_accuracy' in df:
+            plt.plot(df['epoch'], df['test_accuracy'], label='val@1')
+        if 'test_accuracy_top5' in df:
+            plt.plot(df['epoch'], df['test_accuracy_top5'], label='val@5')
+        plt.xlabel('epoch'); plt.ylabel('accuracy (%)'); plt.legend(); plt.grid(True)
+        plt.savefig(os.path.join(self.log_dir, 'accuracy.png'), dpi=200, bbox_inches='tight'); plt.close()
+        # LR
+        if 'learning_rate' in df:
+            plt.figure(); plt.plot(df['epoch'], df['learning_rate'])
+            plt.xlabel('epoch'); plt.ylabel('learning rate'); plt.grid(True)
+            plt.savefig(os.path.join(self.log_dir, 'lr.png'), dpi=200, bbox_inches='tight'); plt.close()
 
 def train(dataloader, model, loss_fn, optimizer, scheduler, epoch, writer, scaler, metric_logger):
     size = len(dataloader.dataset)
@@ -75,7 +121,7 @@ def train(dataloader, model, loss_fn, optimizer, scheduler, epoch, writer, scale
     for batch, (X, y) in progress_bar:
         X, y = X.to(device), y.to(device)
 
-        with autocast('cuda'):
+        with autocast(enabled=True):
             pred = model(X)
             loss = loss_fn(pred, y)
 
@@ -148,7 +194,7 @@ def test(dataloader, model, loss_fn, epoch, writer, train_dataloader, metric_log
     progress_bar = tqdm(dataloader, desc=f"Testing Epoch {epoch+1}")
 
     with torch.no_grad():
-        with autocast('cuda'):
+        with autocast(enabled=True):
             for X, y in progress_bar:
                 X, y = X.to(device), y.to(device)
                 pred = model(X)
@@ -193,21 +239,49 @@ def test(dataloader, model, loss_fn, epoch, writer, train_dataloader, metric_log
     logger.info(f"Test Epoch {epoch+1} - Loss: {test_loss:.4f}, Acc: {accuracy:.2f}%, Top-5 Acc: {accuracy_top5:.2f}%")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Single-GPU ResNet50 training (from scratch) with OneCycleLR')
+    parser.add_argument('--data-dir', type=str, required=False, default=None, help='Root path containing train/ and val/')
+    parser.add_argument('--batch-size', type=int, default=None)
+    parser.add_argument('--workers', type=int, default=None)
+    parser.add_argument('--epochs', type=int, default=None)
+    parser.add_argument('--max-lr', type=float, default=None)
+    parser.add_argument('--pct-start', type=float, default=None)
+    parser.add_argument('--div-factor', type=float, default=None)
+    parser.add_argument('--final-div-factor', type=float, default=None)
+    parser.add_argument('--run-name', type=str, default=None)
+    parser.add_argument('--label-smoothing', type=float, default=None)
+    parser.add_argument('--resume', action='store_true')
+    args = parser.parse_args()
+
     params = Params()
-    
+    if args.batch_size is not None: params.batch_size = args.batch_size
+    if args.workers is not None: params.workers = args.workers
+    if args.epochs is not None: params.epochs = args.epochs
+    if args.max_lr is not None: params.max_lr = args.max_lr
+    if args.pct_start is not None: params.pct_start = args.pct_start
+    if args.div_factor is not None: params.div_factor = args.div_factor
+    if args.final_div_factor is not None: params.final_div_factor = args.final_div_factor
+    if args.run_name is not None: params.name = args.run_name
+    if args.label_smoothing is not None: params.label_smoothing = args.label_smoothing
+
     # Create metric logger
     log_dir = os.path.join("logs", params.name)
     metric_logger = MetricLogger(log_dir)
 
-    #local paths
-    training_folder_name = r'C:\Users\sidhe\TSAIV4\Session9 - Assignment\ImageNet-ResNet50-CNN-main\data\imagenet-mini\train'
-    val_folder_name = r'C:\Users\sidhe\TSAIV4\Session9 - Assignment\ImageNet-ResNet50-CNN-main\data\imagenet-mini\val'
+    # dataset paths
+    if args.data_dir is not None:
+        training_folder_name = os.path.join(args.data_dir, 'train')
+        val_folder_name = os.path.join(args.data_dir, 'val')
+    else:
+        # Fallback example paths; replace or provide --data-dir
+        training_folder_name = './data/imagenet-mini/train'
+        val_folder_name = './data/imagenet-mini/val'
 
     train_transformation = transforms.Compose([
-        transforms.ToTensor(),
         transforms.RandomResizedCrop(224, interpolation=transforms.InterpolationMode.BILINEAR, antialias=True),
         transforms.RandomHorizontalFlip(0.5),
-        transforms.Normalize(mean=[0.485, 0.485, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     train_dataset = torchvision.datasets.ImageFolder(
@@ -225,10 +299,10 @@ if __name__ == "__main__":
     )
 
     val_transformation = transforms.Compose([
-        transforms.ToTensor(),
         transforms.Resize(size=256, antialias=True),
         transforms.CenterCrop(224),
-        transforms.Normalize(mean=[0.485, 0.485, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
     val_dataset = torchvision.datasets.ImageFolder(
@@ -260,14 +334,14 @@ if __name__ == "__main__":
     model = ResNet50(num_classes=num_classes)
     model.to(device)
 
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
     optimizer = torch.optim.SGD(model.parameters(), 
                                lr=params.max_lr/params.div_factor,
                                momentum=params.momentum,
                                weight_decay=params.weight_decay)
 
     # Initialize GradScaler for AMP
-    scaler = GradScaler('cuda')
+    scaler = GradScaler(enabled=True)
 
     steps_per_epoch = len(train_loader)
     total_steps = params.epochs * steps_per_epoch
@@ -321,3 +395,15 @@ if __name__ == "__main__":
         
         test(val_loader, model, loss_fn, epoch + 1, writer, train_dataloader=train_loader,
              metric_logger=metric_logger, calc_acc5=True)
+
+        # Log markdown row and update PNGs after each epoch
+        metric_logger.log_markdown_row({
+            'epoch': epoch + 1,
+            'train_loss': metric_logger.metrics[-2]['train_loss'] if len(metric_logger.metrics) >= 2 else metric_logger.metrics[-1].get('train_loss', None),
+            'test_loss': metric_logger.metrics[-1].get('test_loss', None),
+            'test_accuracy': metric_logger.metrics[-1].get('test_accuracy', None),
+            'test_accuracy_top5': metric_logger.metrics[-1].get('test_accuracy_top5', None),
+            'learning_rate': optimizer.param_groups[0]['lr'],
+            'epoch_time': metric_logger.metrics[-2]['epoch_time'] if len(metric_logger.metrics) >= 2 else None
+        })
+        metric_logger.plot_pngs()
