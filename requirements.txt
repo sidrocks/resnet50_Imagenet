@@ -5,3 +5,6 @@ torchsummary
 pandas
 matplotlib
 tensorboard
+torch-lr-finder
+fire
+numpy
