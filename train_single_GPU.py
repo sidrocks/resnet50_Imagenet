@@ -312,7 +312,7 @@ if __name__ == "__main__":
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
-        batch_size=256,
+        batch_size=params.batch_size,   
         num_workers=params.workers,
         shuffle=False,
         pin_memory=True

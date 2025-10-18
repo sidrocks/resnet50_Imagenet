@@ -57,8 +57,8 @@ Use a subset (e.g., 10–20k images) to find a stable `max_lr`.
 # Example: data under /mnt/imagenet/ILSVRC/Data/CLS-LOC
 python lr_finder.py \
   --data_dir /mnt/imagenet/ILSVRC/Data/CLS-LOC/train \
-  --batch_size 512 \
-  --workers 8 \
+  --batch_size 128 \
+  --workers 2 \
   --start_lr 1e-6 \
   --end_lr 1 \
   --num_iter 300
@@ -74,10 +74,13 @@ python train_single_GPU.py --data-dir /mnt/imagenet/ILSVRC/Data/CLS-LOC --run-na
 # Optional overrides (use suggested max_lr from LR finder)
 python train_single_GPU.py \
   --data-dir /mnt/imagenet/ILSVRC/Data/CLS-LOC \
-  --batch-size 256 \
-  --workers 8 \
+  --batch-size 128 \
+  --workers 2 \
   --epochs 90 \
-  --max-lr 0.3 \
+  --max-lr 0.000141 \
+  --pct-start 0.3 \
+  --div-factor 10 \
+  --final-div-factor 10000 \ 
   --label-smoothing 0.1 \
   --run-name resnet50_single
 ```
