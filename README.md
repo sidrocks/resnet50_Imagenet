@@ -152,5 +152,5 @@ export NCCL_P2P_DISABLE=0
 Example targets (with 8x A100, 120 epochs, AutoAugment + label smoothing):
 - Top-1: 76–78%
 - Top-5: 92–94%
-Actual results depend on hardware, data throughput, and tuning.
+Actual results depend on hardware, data throughput, and tuning. All the best. 
 ```
