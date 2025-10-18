@@ -61,7 +61,7 @@ python lr_finder.py \
   --workers 2 \
   --start_lr 1e-6 \
   --end_lr 1 \
-  --num_iter 300
+  --num_iter 500
 ```
 Outputs under `lr_finder_plots/`: PNG plot and `lr_suggestion_*.json` with a heuristic `suggested_max_lr` for OneCycle.
 
@@ -77,9 +77,9 @@ python train_single_GPU.py \
   --batch-size 128 \
   --workers 2 \
   --epochs 90 \
-  --max-lr 0.000141 \
+  --max-lr 0.097 \
   --pct-start 0.3 \
-  --div-factor 10 \
+  --div-factor 25 \
   --final-div-factor 10000 \ 
   --label-smoothing 0.1 \
   --run-name resnet50_single
@@ -152,5 +152,5 @@ export NCCL_P2P_DISABLE=0
 Example targets (with 8x A100, 120 epochs, AutoAugment + label smoothing):
 - Top-1: 76–78%
 - Top-5: 92–94%
-Actual results depend on hardware, data throughput, and tuning.
+Actual results depend on hardware, data throughput, and tuning. All the best. 
 ```
