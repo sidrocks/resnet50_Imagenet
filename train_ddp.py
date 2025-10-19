@@ -18,6 +18,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
+import matplotlib
+matplotlib.use('Agg')  # Set backend before importing pyplot
+import matplotlib.pyplot as plt
+import pandas as pd
+
 from model import ResNet50
 
 
@@ -109,41 +114,57 @@ def save_markdown_row(md_path, epoch, metrics):
 
 
 def plot_pngs(log_json_path, out_dir):
-    try:
-        import pandas as pd
-        import matplotlib.pyplot as plt
-    except Exception:
-        return
+    """Generate PNG plots from training history JSON."""
     if not os.path.exists(log_json_path):
         return
+    
     with open(log_json_path, 'r') as f:
         hist = json.load(f)
+    
     if not hist:
         return
+    
     os.makedirs(out_dir, exist_ok=True)
     df = pd.DataFrame(hist)
+    
     # Loss plot
-    plt.figure()
-    if 'train_loss' in df:
-        plt.plot(df['epoch'], df['train_loss'], label='train')
-    if 'val_loss' in df:
-        plt.plot(df['epoch'], df['val_loss'], label='val')
-    plt.xlabel('epoch'); plt.ylabel('loss'); plt.legend(); plt.grid(True)
-    plt.savefig(os.path.join(out_dir, 'loss.png'), dpi=200, bbox_inches='tight'); plt.close()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    if 'train_loss' in df.columns and not df['train_loss'].isna().all():
+        ax.plot(df['epoch'], df['train_loss'], label='train', marker='o', linewidth=2)
+    if 'val_loss' in df.columns and not df['val_loss'].isna().all():
+        ax.plot(df['epoch'], df['val_loss'], label='val', marker='s', linewidth=2)
+    ax.set_xlabel('Epoch', fontsize=12)
+    ax.set_ylabel('Loss', fontsize=12)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_title('Training and Validation Loss', fontsize=14)
+    fig.savefig(os.path.join(out_dir, 'loss.png'), dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    
     # Accuracy plot
-    plt.figure()
-    if 'val_top1' in df:
-        plt.plot(df['epoch'], df['val_top1'], label='val@1')
-    if 'val_top5' in df:
-        plt.plot(df['epoch'], df['val_top5'], label='val@5')
-    plt.xlabel('epoch'); plt.ylabel('accuracy (%)'); plt.legend(); plt.grid(True)
-    plt.savefig(os.path.join(out_dir, 'accuracy.png'), dpi=200, bbox_inches='tight'); plt.close()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    if 'val_top1' in df.columns and not df['val_top1'].isna().all():
+        ax.plot(df['epoch'], df['val_top1'], label='val@1', marker='o', linewidth=2)
+    if 'val_top5' in df.columns and not df['val_top5'].isna().all():
+        ax.plot(df['epoch'], df['val_top5'], label='val@5', marker='s', linewidth=2)
+    ax.set_xlabel('Epoch', fontsize=12)
+    ax.set_ylabel('Accuracy (%)', fontsize=12)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.set_title('Validation Accuracy', fontsize=14)
+    fig.savefig(os.path.join(out_dir, 'accuracy.png'), dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    
     # LR plot
-    if 'lr' in df:
-        plt.figure()
-        plt.plot(df['epoch'], df['lr'], label='lr')
-        plt.xlabel('epoch'); plt.ylabel('learning rate'); plt.grid(True)
-        plt.savefig(os.path.join(out_dir, 'lr.png'), dpi=200, bbox_inches='tight'); plt.close()
+    if 'lr' in df.columns and not df['lr'].isna().all():
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(df['epoch'], df['lr'], marker='o', linewidth=2, color='blue')
+        ax.set_xlabel('Epoch', fontsize=12)
+        ax.set_ylabel('Learning Rate', fontsize=12)
+        ax.grid(True, alpha=0.3)
+        ax.set_title('Learning Rate Schedule', fontsize=14)
+        fig.savefig(os.path.join(out_dir, 'lr.png'), dpi=200, bbox_inches='tight')
+        plt.close(fig)
 
 
 def main():
@@ -303,8 +324,12 @@ def main():
                 'epoch_time': float(epoch_time),
             }
             history.append(entry)
+            
+            # Save JSON history
             with open(json_path, 'w') as f:
                 json.dump(history, f, indent=2)
+            
+            # Save markdown row
             save_markdown_row(md_path, epoch + 1, {
                 'train_loss': train_loss,
                 'val_loss': val_loss,
@@ -313,6 +338,11 @@ def main():
                 'lr': lr_now,
                 'epoch_time': epoch_time,
             })
+            
+            # Generate plots after each epoch
+            plot_pngs(json_path, logs_dir)
+            
+            # Log to tensorboard
             if writer:
                 writer.add_scalar('train/loss', train_loss, epoch)
                 writer.add_scalar('train/top1', train_top1, epoch)
@@ -341,6 +371,7 @@ def main():
             }, ckpt_path)
 
     if is_main_process():
+        # Final plot generation (in case it's needed)
         plot_pngs(json_path, logs_dir)
         if writer:
             writer.close()
