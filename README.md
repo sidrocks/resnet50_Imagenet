@@ -224,3 +224,5 @@ Actual results depend on hardware, data throughput, and tuning.
 ![Training and Val Loss](https://github.com/user-attachments/assets/4f28946f-eaef-4d8d-9e56-28dbadbcbe58)
 ![Validation Accuracy](https://github.com/user-attachments/assets/007b5215-3462-4169-87b9-81f9041f4c99)
 ![LR Schedule](https://github.com/user-attachments/assets/e67f32e9-720b-41df-8227-7afb617dd8f2)
+
+## 11) Results on the Imagenet 1000 classes (Single GPU)
