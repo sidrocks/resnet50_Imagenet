@@ -7,6 +7,21 @@ Train ResNet-50 on ImageNet-1K from scratch on EC2, targeting 75%+ Top-1 (78% wi
 - Single-GPU script for local runs
 - Per-epoch Markdown log and PNG plots (loss, accuracy, LR)
 
+## Requirements
+- Python 3.8+
+- CUDA 11.7+ / CUDA 12.x
+- PyTorch 2.0+
+- 500GB+ storage for ImageNet dataset
+- GPU with 16GB+ VRAM recommended
+
+## Model Architecture
+This implementation uses PyTorch's torchvision ResNet50 architecture:
+- **Architecture**: ResNet-50 (Deep Residual Learning)
+- **Parameters**: ~25.6M trainable parameters
+- **Input Size**: 224x224 RGB images
+- **Training**: From scratch (no pretrained weights)
+- **Output**: 1000 classes (ImageNet-1K)
+
 ## 1) EC2 setup
 
 - Recommended instances:
@@ -27,12 +42,27 @@ sudo mkdir -p /mnt/imagenet && sudo chown $USER:$USER /mnt/imagenet
 
 ### Clone and environment
 ```bash
+# Original repository
 git clone https://github.com/sidrocks/resnet50_Imagenet.git
 cd resnet50_Imagenet
+
+# OR use the fork
+git clone https://github.com/yasirreshi/Resnet50_Imagenet_Fork.git
+cd Resnet50_Imagenet_Fork
+
+# Setup environment
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+**Dependencies** (from `requirements.txt`):
+- `torch`, `torchvision` - PyTorch deep learning framework
+- `matplotlib`, `pandas` - For plotting and logging
+- `tqdm` - Progress bars
+- `tensorboard` - Training visualization
+- `torch-lr-finder` - Learning rate finder utility
+- `numpy` - Numerical computing
 
 ## 2) Prepare ImageNet-1K
 
@@ -126,10 +156,46 @@ torchrun --nproc_per_node 8 train_ddp.py --data-dir D:\imagenet --batch-size 256
 torchrun --nproc_per_node 8 train_ddp.py --data-dir <DATA_DIR> --epochs 120 --max-lr <LR> --resume --run-name resnet50_from_scratch
 ```
 
-## 7) Deliverables
-- Markdown log: `logs/<run-name>/training_log.md` contains every epoch from 1..N.
-- PNG plots: `loss.png`, `accuracy.png`, `lr.png` saved alongside.
-- Checkpoints: under `checkpoints/<run-name>/`.
+## 7) Monitoring Training Progress
+
+Training progress is automatically logged and visualized in multiple formats:
+
+### Log Files
+- **Markdown log**: `logs/<run-name>/training_log.md` - Human-readable table with all metrics
+- **JSON log**: `logs/<run-name>/training_log.json` - Machine-readable format for programmatic access
+- **TensorBoard logs**: `runs/<run-name>/` - Real-time metrics visualization
+
+### Plots (Auto-generated after each epoch)
+The training scripts automatically generate and update PNG plots after each epoch:
+
+- **`loss.png`** - Training and validation loss curves over epochs
+  - Shows both train loss (solid line with circles) and validation loss (solid line with squares)
+  - Helps identify overfitting (when val loss increases while train loss decreases)
+
+- **`accuracy.png`** - Validation accuracy metrics
+  - Top-1 accuracy (most likely prediction is correct)
+  - Top-5 accuracy (correct answer in top 5 predictions)
+  - Target: 75-78% Top-1, 92-94% Top-5
+
+- **`lr.png`** - Learning rate schedule over epochs
+  - Visualizes the OneCycleLR policy
+  - Shows warmup phase, peak LR, and annealing phase
+
+**Plots are updated in real-time** as training progresses, allowing you to monitor convergence without waiting for training to complete.
+
+### Using TensorBoard
+For real-time monitoring during training:
+```bash
+# In a separate terminal
+tensorboard --logdir runs/<run-name>
+# Then open http://localhost:6006 in your browser
+```
+
+### Checkpoints
+- Saved in: `checkpoints/<run-name>/`
+- `checkpoint.pt` - Latest checkpoint (overwritten each epoch)
+- `model_000.pt`, `model_001.pt`, ... - Per-epoch checkpoints
+- Each checkpoint contains: model state, optimizer state, scheduler state, scaler state, epoch number
 
 ## 8) Tips and troubleshooting
 - Ensure NCCL env for multi-node or different topologies; for single node usually default works. If issues:

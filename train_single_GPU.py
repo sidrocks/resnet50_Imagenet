@@ -1,6 +1,8 @@
 import json
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Set backend before importing pyplot
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
@@ -52,11 +54,19 @@ class MetricLogger:
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
         self.metrics = []
+        self.current_epoch_metrics = {}
         
     def log_metrics(self, epoch_metrics):
-        self.metrics.append(epoch_metrics)
-        with open(os.path.join(self.log_dir, 'training_log.json'), 'w') as f:
-            json.dump(self.metrics, f, indent=4)
+        # Update current epoch metrics instead of appending immediately
+        self.current_epoch_metrics.update(epoch_metrics)
+        
+    def finalize_epoch(self):
+        # Only append when epoch is complete
+        if self.current_epoch_metrics:
+            self.metrics.append(self.current_epoch_metrics.copy())
+            with open(os.path.join(self.log_dir, 'training_log.json'), 'w') as f:
+                json.dump(self.metrics, f, indent=4)
+            self.current_epoch_metrics = {}
 
     def log_markdown_row(self, epoch_metrics):
         md_path = os.path.join(self.log_dir, 'training_log.md')
@@ -67,40 +77,68 @@ class MetricLogger:
         if not os.path.exists(md_path):
             with open(md_path, 'w') as f:
                 f.write(header)
-        row = f"| {epoch_metrics.get('epoch','')} | {epoch_metrics.get('train_loss',''):.4f} | {epoch_metrics.get('test_loss','') if epoch_metrics.get('test_loss') is not None else ''} | {epoch_metrics.get('test_accuracy','') if epoch_metrics.get('test_accuracy') is not None else ''} | {epoch_metrics.get('test_accuracy_top5','') if epoch_metrics.get('test_accuracy_top5') is not None else ''} | {epoch_metrics.get('learning_rate',''):.6f} | {epoch_metrics.get('epoch_time',''):.2f} |\n"
+        
+        # Format row with proper handling of missing values
+        epoch = epoch_metrics.get('epoch', '')
+        train_loss = f"{epoch_metrics.get('train_loss', 0):.4f}" if epoch_metrics.get('train_loss') is not None else ''
+        test_loss = f"{epoch_metrics.get('test_loss', 0):.4f}" if epoch_metrics.get('test_loss') is not None else ''
+        test_acc = f"{epoch_metrics.get('test_accuracy', 0):.2f}" if epoch_metrics.get('test_accuracy') is not None else ''
+        test_acc5 = f"{epoch_metrics.get('test_accuracy_top5', 0):.2f}" if epoch_metrics.get('test_accuracy_top5') is not None else ''
+        lr = f"{epoch_metrics.get('learning_rate', 0):.6f}" if epoch_metrics.get('learning_rate') is not None else ''
+        epoch_time = f"{epoch_metrics.get('epoch_time', 0):.2f}" if epoch_metrics.get('epoch_time') is not None else ''
+        
+        row = f"| {epoch} | {train_loss} | {test_loss} | {test_acc} | {test_acc5} | {lr} | {epoch_time} |\n"
         with open(md_path, 'a') as f:
             f.write(row)
 
     def plot_pngs(self):
-        try:
-            import pandas as pd
-            import matplotlib.pyplot as plt
-        except Exception:
-            return
+        import matplotlib
+        matplotlib.use('Agg')  # Set backend before importing pyplot
+        import matplotlib.pyplot as plt
+        
         if not self.metrics:
             return
+        
         df = pd.DataFrame(self.metrics)
-        # Loss
-        plt.figure()
-        if 'train_loss' in df:
-            plt.plot(df['epoch'], df['train_loss'], label='train')
-        if 'test_loss' in df:
-            plt.plot(df['epoch'], df['test_loss'], label='val')
-        plt.xlabel('epoch'); plt.ylabel('loss'); plt.legend(); plt.grid(True)
-        plt.savefig(os.path.join(self.log_dir, 'loss.png'), dpi=200, bbox_inches='tight'); plt.close()
-        # Accuracy
-        plt.figure()
-        if 'test_accuracy' in df:
-            plt.plot(df['epoch'], df['test_accuracy'], label='val@1')
-        if 'test_accuracy_top5' in df:
-            plt.plot(df['epoch'], df['test_accuracy_top5'], label='val@5')
-        plt.xlabel('epoch'); plt.ylabel('accuracy (%)'); plt.legend(); plt.grid(True)
-        plt.savefig(os.path.join(self.log_dir, 'accuracy.png'), dpi=200, bbox_inches='tight'); plt.close()
-        # LR
-        if 'learning_rate' in df:
-            plt.figure(); plt.plot(df['epoch'], df['learning_rate'])
-            plt.xlabel('epoch'); plt.ylabel('learning rate'); plt.grid(True)
-            plt.savefig(os.path.join(self.log_dir, 'lr.png'), dpi=200, bbox_inches='tight'); plt.close()
+        
+        # Loss plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        if 'train_loss' in df.columns and not df['train_loss'].isna().all():
+            ax.plot(df['epoch'], df['train_loss'], label='train', marker='o', linewidth=2)
+        if 'test_loss' in df.columns and not df['test_loss'].isna().all():
+            ax.plot(df['epoch'], df['test_loss'], label='val', marker='s', linewidth=2)
+        ax.set_xlabel('Epoch', fontsize=12)
+        ax.set_ylabel('Loss', fontsize=12)
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+        ax.set_title('Training and Validation Loss', fontsize=14)
+        fig.savefig(os.path.join(self.log_dir, 'loss.png'), dpi=200, bbox_inches='tight')
+        plt.close(fig)
+        
+        # Accuracy plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        if 'test_accuracy' in df.columns and not df['test_accuracy'].isna().all():
+            ax.plot(df['epoch'], df['test_accuracy'], label='val@1', marker='o', linewidth=2)
+        if 'test_accuracy_top5' in df.columns and not df['test_accuracy_top5'].isna().all():
+            ax.plot(df['epoch'], df['test_accuracy_top5'], label='val@5', marker='s', linewidth=2)
+        ax.set_xlabel('Epoch', fontsize=12)
+        ax.set_ylabel('Accuracy (%)', fontsize=12)
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+        ax.set_title('Validation Accuracy', fontsize=14)
+        fig.savefig(os.path.join(self.log_dir, 'accuracy.png'), dpi=200, bbox_inches='tight')
+        plt.close(fig)
+        
+        # LR plot
+        if 'learning_rate' in df.columns and not df['learning_rate'].isna().all():
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(df['epoch'], df['learning_rate'], marker='o', linewidth=2, color='blue')
+            ax.set_xlabel('Epoch', fontsize=12)
+            ax.set_ylabel('Learning Rate', fontsize=12)
+            ax.grid(True, alpha=0.3)
+            ax.set_title('Learning Rate Schedule', fontsize=14)
+            fig.savefig(os.path.join(self.log_dir, 'lr.png'), dpi=200, bbox_inches='tight')
+            plt.close(fig)
 
 def train(dataloader, model, loss_fn, optimizer, scheduler, epoch, writer, scaler, metric_logger):
     size = len(dataloader.dataset)
@@ -396,14 +434,13 @@ if __name__ == "__main__":
         test(val_loader, model, loss_fn, epoch + 1, writer, train_dataloader=train_loader,
              metric_logger=metric_logger, calc_acc5=True)
 
+        # Finalize epoch metrics (combines train + test metrics)
+        metric_logger.finalize_epoch()
+        
         # Log markdown row and update PNGs after each epoch
-        metric_logger.log_markdown_row({
-            'epoch': epoch + 1,
-            'train_loss': metric_logger.metrics[-2]['train_loss'] if len(metric_logger.metrics) >= 2 else metric_logger.metrics[-1].get('train_loss', None),
-            'test_loss': metric_logger.metrics[-1].get('test_loss', None),
-            'test_accuracy': metric_logger.metrics[-1].get('test_accuracy', None),
-            'test_accuracy_top5': metric_logger.metrics[-1].get('test_accuracy_top5', None),
-            'learning_rate': optimizer.param_groups[0]['lr'],
-            'epoch_time': metric_logger.metrics[-2]['epoch_time'] if len(metric_logger.metrics) >= 2 else None
-        })
+        if metric_logger.metrics:
+            last_metrics = metric_logger.metrics[-1]
+            metric_logger.log_markdown_row(last_metrics)
+        
+        # Generate plots
         metric_logger.plot_pngs()
