@@ -218,5 +218,9 @@ export NCCL_P2P_DISABLE=0
 Example targets (with 8x A100, 120 epochs, AutoAugment + label smoothing):
 - Top-1: 76–78%
 - Top-5: 92–94%
-Actual results depend on hardware, data throughput, and tuning. All the best. 
+Actual results depend on hardware, data throughput, and tuning.
 ```
+## 10) Results on the Mini-Imagenet 100 classes
+![Training and Val Loss](https://github.com/user-attachments/assets/4f28946f-eaef-4d8d-9e56-28dbadbcbe58)
+![Validation Accuracy](https://github.com/user-attachments/assets/007b5215-3462-4169-87b9-81f9041f4c99)
+![LR Schedule](https://github.com/user-attachments/assets/e67f32e9-720b-41df-8227-7afb617dd8f2)
