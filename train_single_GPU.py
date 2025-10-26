@@ -11,7 +11,7 @@ import time
 from math import sqrt
 
 from model import ResNet50
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 from tqdm import tqdm
 import torch
@@ -159,7 +159,7 @@ def train(dataloader, model, loss_fn, optimizer, scheduler, epoch, writer, scale
     for batch, (X, y) in progress_bar:
         X, y = X.to(device), y.to(device)
 
-        with autocast(enabled=True):
+        with autocast(device_type='cuda'):
             pred = model(X)
             loss = loss_fn(pred, y)
 
@@ -232,7 +232,7 @@ def test(dataloader, model, loss_fn, epoch, writer, train_dataloader, metric_log
     progress_bar = tqdm(dataloader, desc=f"Testing Epoch {epoch+1}")
 
     with torch.no_grad():
-        with autocast(enabled=True):
+        with autocast(device_type='cuda'):
             for X, y in progress_bar:
                 X, y = X.to(device), y.to(device)
                 pred = model(X)
@@ -379,7 +379,7 @@ if __name__ == "__main__":
                                weight_decay=params.weight_decay)
 
     # Initialize GradScaler for AMP
-    scaler = GradScaler(enabled=True)
+    scaler = GradScaler('cuda')
 
     steps_per_epoch = len(train_loader)
     total_steps = params.epochs * steps_per_epoch
