@@ -245,6 +245,12 @@ Total Training Time: ~ 67 hours for 50 Epochs
 After 50 Epochs Testing - Top 1 Accuracy: 75.27%✅
                           Top 5 Accuracy: 92.56%✅
 
+**Monitoring (Training Logs)**
+
+<img width="2400" height="1200" alt="loss_accuracy_comparison" src="https://github.com/user-attachments/assets/7538ee51-11c9-445f-97d1-d689fa848c39" />
+
+<img width="3200" height="2000" alt="training_dashboard" src="https://github.com/user-attachments/assets/d82e73f7-3ffa-477b-8a23-51050a1c2eaa" />
+
 **Monitoring (Tensor Board Logs)**
 
 <img width="1461" height="585" alt="image" src="https://github.com/user-attachments/assets/033a59dc-12fb-41a8-b8a9-0ef8b8624670" />
