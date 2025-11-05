@@ -1,0 +1,24 @@
+[
+    {
+        "epoch": 37,
+        "test_loss": 2.538203154984167,
+        "test_accuracy": 60.742,
+        "test_accuracy_top5": 84.358,
+        "train_loss": 2.7716745382850267,
+        "train_accuracy": 56.372042052285146,
+        "train_accuracy_top5": 79.38457671794544,
+        "learning_rate": 0.03454884577095477,
+        "epoch_time": 4689.59005355835
+    },
+    {
+        "epoch": 38,
+        "train_loss": 2.744152030056567,
+        "train_accuracy": 57.00302926940828,
+        "train_accuracy_top5": 79.8216001504878,
+        "learning_rate": 0.030348479482973253,
+        "epoch_time": 4689.737700223923,
+        "test_loss": 2.4968907142089587,
+        "test_accuracy": 61.86,
+        "test_accuracy_top5": 85.004
+    }
+]

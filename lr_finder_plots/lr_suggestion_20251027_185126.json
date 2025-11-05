@@ -1,0 +1,8 @@
+{
+  "suggested_max_lr": 0.1,
+  "min_loss": 6.96415011805253,
+  "min_loss_lr": 1.0,
+  "start_lr": 1e-06,
+  "end_lr": 1,
+  "num_iter": 300
+}
